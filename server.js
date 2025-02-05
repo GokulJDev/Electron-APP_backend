@@ -4,11 +4,14 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const rateLimit = require('express-rate-limit'); // Import rate limiting
+const multer = require('multer');
 const dotenv = require('dotenv');
 dotenv.config();
 
 const User = require('./models/User');
 const Project = require('./models/Project');
+
+const upload = multer({ dest: 'uploads/' });
 
 const app = express();
 app.use(express.json());
@@ -20,52 +23,58 @@ mongoose.connect(connectionString)
   .then(() => console.log('Connected to MongoDB Atlas'))
   .catch(err => console.error('Error connecting to MongoDB Atlas:', err));
 
-// Middleware to verify access token
-const verifyToken = (req, res, next) => {
-  const token = req.headers['authorization']?.split(' ')[1]; // Get token from Authorization header
 
-  if (!token) {
-    return res.status(403).json({ message: 'Access denied. No token provided.' });
-  }
-
-  jwt.verify(token, process.env.SECRET_KEY, (err, decoded) => {
-    if (err) {
-      // Handle the error based on token expiration
-      if (err.name === 'TokenExpiredError') {
-        return res.status(401).json({ message: 'Token expired. Please use the refresh token to get a new access token.' });
+  const verifyToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    
+    if (!authHeader) {
+      return res.status(403).json({ message: 'Access denied. No token provided.' });
+    }
+  
+    const token = authHeader.split(' ')[1]; // Extract token from "Bearer <token>"
+    
+    console.log('Received Token:', token); // Log the token to debug
+  
+    if (!token) {
+      return res.status(403).json({ message: 'Access denied. Token is missing.' });
+    }
+  
+    jwt.verify(token, process.env.SECRET_KEY, (err, decoded) => {
+      if (err) {
+        console.error('JWT Verification Error:', err); // Log error for debugging
+        return res.status(401).json({ message: 'Invalid token.' });
       }
-      return res.status(401).json({ message: 'Invalid or expired token.' });
+  
+      req.user = decoded; // Attach decoded user info to request
+      next();
+    });
+  };
+  
+  
+  // Refresh token endpoint
+  app.post('/refresh-token', async (req, res) => {
+    const { refreshToken } = req.body;
+  
+    if (!refreshToken) {
+      return res.status(401).json({ message: 'No refresh token provided.' });
     }
-
-    req.user = decoded; // Attach the decoded user to the request object
-    next();
+  
+    jwt.verify(refreshToken, process.env.REFRESH_SECRET, (err, decoded) => {
+      if (err) {
+        console.error('Refresh Token Error:', err); // Logging for debugging
+        return res.status(403).json({ message: 'Invalid refresh token.' });
+      }
+  
+      // Generate a new access token
+      const newAccessToken = jwt.sign(
+        { userId: decoded.userId, role: decoded.role },
+        process.env.SECRET_KEY,
+        { expiresIn: '1h' }
+      );
+  
+      res.json({ accessToken: newAccessToken });
+    });
   });
-};
-
-app.post('/refresh-token', async (req, res) => {
-  const refreshToken = req.body.refreshToken;
-
-  if (!refreshToken) {
-    return res.status(401).json({ message: 'No refresh token provided.' });
-  }
-
-  // Verify the refresh token
-  jwt.verify(refreshToken, process.env.REFRESH_SECRET, (err, decoded) => {
-    if (err) {
-      return res.status(403).json({ message: 'Invalid refresh token.' });
-    }
-
-    // Generate a new access token
-    const newAccessToken = jwt.sign(
-      { userId: decoded.userId, role: decoded.role },
-      process.env.SECRET_KEY,
-      { expiresIn: '1h' }
-    );
-
-    // Send the new access token
-    res.json({ accessToken: newAccessToken });
-  });
-});
 
 // Rate limiting to prevent abuse (limit to 100 requests per hour per IP)
 const limiter = rateLimit({
@@ -150,12 +159,20 @@ app.post('/login', async (req, res) => {
     res.status(500).json({ message: 'Error logging in' });
   }
 });
-
 // Logout Route
 app.post('/logout', async (req, res) => {
-  const { userId } = req.body;
+  const { token } = req.body; // Get the refresh token from the request body
 
   try {
+    if (!token) {
+      return res.status(400).json({ message: 'Token is required' });
+    }
+
+    // Verify the token
+    const decoded = jwt.verify(token, process.env.REFRESH_SECRET); // Using the refresh token secret
+    const userId = decoded.userId; // Assuming the userId is in the token
+
+    // Find the user based on the decoded userId
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -167,114 +184,167 @@ app.post('/logout', async (req, res) => {
 
     res.json({ message: 'Logout successful' });
   } catch (err) {
+    if (err.name === 'JsonWebTokenError') {
+      return res.status(401).json({ message: 'Invalid token' });
+    }
     console.error('Logout error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
+// Endpoint to check if project name exists
+app.get("/project/check-name", async (req, res) => {
+  const { name } = req.query;
 
-// Helper function to handle repeated project checks
-const validateProjectFields = (req, res, next) => {
-  const { name, filePath, description } = req.body;
-  if (!name || !filePath || !description) {
-    return res.status(400).json({ message: 'Name, file path, and description are required' });
+  if (!name) {
+    return res.status(400).json({ error: "Project name is required" });
   }
-  next();
-};
+
+  try {
+      // Query the database using the 'name' field
+      const existingProject = await Project.exists({ name: name });
+
+      if (existingProject) {
+          return res.json({ exists: true });
+      }
+      return res.json({ exists: false });
+  } catch (error) {
+      console.error("Error checking project name:", error);
+      return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 
 // Route to create a new project
-app.post('/projects', validateProjectFields, async (req, res) => {
-  const { name, filePath, description, tags, image, fileMetadata, imageMetadata } = req.body;
-  const userId = req.user.userId;
-
+app.post("/project", verifyToken, upload.fields([{ name: "image" }]), async (req, res) => {
   try {
-    const newProject = new Project({
-      name,
-      filePath,
-      description,
-      tags,
-      userId,
-      image,
-      fileMetadata,
-      imageMetadata,
+      const { name, description, tags } = req.body;
+      const image = req.files["image"] ? req.files["image"][0] : null;
+      const userId = req.user.userId;
+
+      // Fetch the username from userId
+      const user = await User.findById(userId);
+      const username = user ? user.username : "Unknown User";
+
+      const newProject = new Project({
+          name,
+          description,
+          tags: tags ? tags.split(",") : [],
+          image: image ? `/uploads/${image.filename}` : null,
+          imageMetadata: image ? {
+              originalName: image.originalname,
+              size: image.size,
+              mimeType: image.mimetype,
+          } : null,
+          userId: userId,
+          status: "pending",
+          fileSize: image ? image.size : 0, 
+          auditLogs: [{ action: "Created Project", performedBy: username, details: "Initial project creation" }]
+      });
+
+      await newProject.save();
+      console.log("New project ID:", newProject._id);
+      res.status(201).json({ 
+          message: "Project created successfully", 
+          projectId: newProject._id,
+          projectName: newProject.name,
+          project: newProject 
+      });
+    
+
+  } catch (error) {
+      console.error("Error creating project:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// Get project details by project name
+app.get('/projectdata/:projectName', async (req, res) => {
+  try {
+      // Find project by name
+      const project = await Project.findOne({ name: req.params.projectName }).exec();
+
+      if (!project) {
+          return res.status(404).json({ message: "Project not found" });
+      }
+
+      res.json({
+          name: project.name,
+          description: project.description,
+          floorPlan: project.image ? `${project.image}` : null,
+      });
+  } catch (error) {
+      console.error("Error fetching project:", error);
+      res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+
+app.put('/projectdata/:projectName', async (req, res) => {
+  try {
+    const { name, description, floorPlan } = req.body;
+
+    // Find and update the project
+    const updatedProject = await Project.findOneAndUpdate(
+      { name: req.params.projectName }, // Find project by name
+      { name, description, image: floorPlan }, // Fields to update
+      { new: true, runValidators: true } // Return updated document & validate input
+    );
+
+    if (!updatedProject) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    res.json({
+      message: "Project updated successfully",
+      project: {
+        name: updatedProject.name,
+        description: updatedProject.description,
+        floorPlan: updatedProject.image ? `${updatedProject.image}` : null,
+      },
     });
-
-    await newProject.save();
-    res.status(201).json({ message: 'Project created successfully!', project: newProject });
-  } catch (err) {
-    console.error('Error creating project:', err);
-    res.status(500).json({ message: 'Error creating project' });
+  } catch (error) {
+    console.error("Error updating project:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 });
 
-// Route to get all projects of the current user
-app.get('/projects', verifyToken, async (req, res) => {
-  const userId = req.user.userId;
 
+
+app.post("/project/uploadModel", verifyToken, upload.single("modelFile"), async (req, res) => {
   try {
-    const projects = await Project.find({ userId, isDeleted: false });
-    res.json(projects);
-  } catch (err) {
-    console.error('Error fetching projects:', err);
-    res.status(500).json({ message: 'Server error' });
+      const { id } = req.params;
+      const modelFile = req.file;
+      const userId = req.user.userId;
+
+      if (!modelFile) {
+          return res.status(400).json({ error: "No 3D model file uploaded" });
+      }
+
+      const project = await Project.findById(id);
+      if (!project) {
+          return res.status(404).json({ error: "Project not found" });
+      }
+
+      project.modelFile = `/uploads/models/${modelFile.filename}`;
+      project.modelMetadata = {
+          originalName: modelFile.originalname,
+          size: modelFile.size,
+          format: modelFile.mimetype,
+      };
+
+      project.auditLogs.push({ action: "Uploaded 3D Model", performedBy: userId, details: "3D model added to project" });
+
+      await project.save();
+      res.status(200).json({ message: "3D model uploaded successfully", project });
+
+  } catch (error) {
+      console.error("Error uploading 3D model:", error);
+      res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
-// Route to update a project
-app.put('/projects/:id', verifyToken, validateProjectFields, async (req, res) => {
-  const { id } = req.params;
-  const { name, filePath, description, tags, status, image, fileMetadata, imageMetadata } = req.body;
 
-  try {
-    const project = await Project.findById(id);
-    if (!project) {
-      return res.status(404).json({ message: 'Project not found' });
-    }
-
-    if (project.userId.toString() !== req.user.userId) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-
-    project.name = name || project.name;
-    project.filePath = filePath || project.filePath;
-    project.description = description || project.description;
-    project.tags = tags || project.tags;
-    project.status = status || project.status;
-    project.image = image || project.image;
-    project.fileMetadata = fileMetadata || project.fileMetadata;
-    project.imageMetadata = imageMetadata || project.imageMetadata;
-    project.updatedAt = new Date();
-
-    await project.save();
-    res.json({ message: 'Project updated successfully!', project });
-  } catch (err) {
-    console.error('Error updating project:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Route to delete (soft) a project
-app.delete('/projects/:id', verifyToken, async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    const project = await Project.findById(id);
-    if (!project) {
-      return res.status(404).json({ message: 'Project not found' });
-    }
-
-    if (project.userId.toString() !== req.user.userId) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-
-    project.isDeleted = true;
-    await project.save();
-    res.json({ message: 'Project deleted successfully!', project });
-  } catch (err) {
-    console.error('Error deleting project:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
 
 // Start the server
 const PORT = process.env.PORT || 3002;

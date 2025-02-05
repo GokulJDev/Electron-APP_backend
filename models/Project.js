@@ -6,29 +6,21 @@ const projectSchema = new mongoose.Schema({
         required: true,
         minlength: 3,
         maxlength: 50,
+        unique: true,
     },
-    filePath: {
-        type: String,  // This will store the file path after upload (with .kaira extension)
-        required: true,
-        validate: {
-            validator: function(v) {
-                return v.endsWith('.kaira');  // Ensure the file extension is .kaira
-            },
-            message: props => `${props.value} must have a .kaira extension!`
-        }
-    },
-    fileMetadata: {
-        originalName: String,
-        size: Number,
-        mimeType: String,
+    description: {
+        type: String,
+        maxlength: 500,
     },
     image: {
-        type: String,  // This will store the image path or URL after upload
+        type: String, // Stores image file path or URL
         validate: {
-            validator: function(v) {
-                return /^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$/.test(v);
+            validator: function (v) {
+                return v.startsWith("http://") || 
+                       v.startsWith("https://") || 
+                       v.startsWith("/uploads/");
             },
-            message: props => `${props.value} is not a valid URL!`
+            message: props => `${props.value} is not a valid URL or file path!`
         }
     },
     imageMetadata: {
@@ -36,35 +28,39 @@ const projectSchema = new mongoose.Schema({
         size: Number,
         mimeType: String,
     },
-    description: {
-        type: String,
-        maxlength: 500,
+    modelFile: {  
+        type: String, // Stores 3D model file path or URL
+        validate: {
+            validator: function (v) {
+                return v.startsWith("http://") || 
+                       v.startsWith("https://") || 
+                       v.startsWith("/uploads/models/");
+            },
+            message: props => `${props.value} is not a valid 3D model URL or file path!`
+        }
     },
-    status: {
-        type: String,
-        enum: ['pending', 'in progress', 'completed'],
-        default: 'pending',
+    modelMetadata: {  
+        originalName: String,
+        size: Number,
+        format: String, // Example: 'glb', 'fbx', 'obj'
     },
     tags: [{
         type: String,
         maxlength: 20,
     }],
+    status: {
+        type: String,
+        enum: ['pending', 'in progress', 'completed'],
+        default: 'pending',
+    },
     userId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',  // Reference to the User model
+        ref: 'User',  
         required: true,
     },
-    createdAt: {
-        type: Date,
-        default: Date.now,
-    },
-    updatedAt: {
-        type: Date,
-        default: Date.now,
-    },
-    version: {
+    fileSize: {
         type: Number,
-        default: 1,
+        default: 0
     },
     isDeleted: {
         type: Boolean,
@@ -73,7 +69,7 @@ const projectSchema = new mongoose.Schema({
     auditLogs: [{
         action: String,
         performedBy: {
-            type: mongoose.Schema.Types.ObjectId,
+            type: String,
             ref: 'User',
         },
         performedAt: {
@@ -82,7 +78,7 @@ const projectSchema = new mongoose.Schema({
         },
         details: String,
     }]
-},{ collection: 'Projects', timestamps: true });
+}, { collection: 'Projects', timestamps: true });
 
 projectSchema.index({ userId: 1 });
 projectSchema.index({ createdAt: -1 });
