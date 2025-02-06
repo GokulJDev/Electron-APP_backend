@@ -11,11 +11,21 @@ dotenv.config();
 const User = require('./models/User');
 const Project = require('./models/Project');
 
-const upload = multer({ dest: 'uploads/' });
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/');
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
+});
+
+const upload = multer({ storage: storage });
 
 const app = express();
 app.use(express.json());
 app.use(cors());
+app.use('/uploads', express.static('uploads'));
 
 // MongoDB connection
 const connectionString = process.env.MONGO_URI;
@@ -23,7 +33,7 @@ mongoose.connect(connectionString)
   .then(() => console.log('Connected to MongoDB Atlas'))
   .catch(err => console.error('Error connecting to MongoDB Atlas:', err));
 
-
+  
   const verifyToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     
