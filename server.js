@@ -202,6 +202,47 @@ app.post('/logout', async (req, res) => {
   }
 });
 
+app.get("/dashboard", async (req, res) => {
+  const projects = await Project.find({ isDeleted: false }).sort({ updatedAt: -1 }).limit(5);
+  try{
+          const totalProjects = await Project.countDocuments({ isDeleted: false });
+          const activeProjects = await Project.countDocuments({ status: 'in progress', isDeleted: false });
+  
+          // Calculate trends
+          const oneWeekAgo = new Date();
+          oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+          const oneMonthAgo = new Date();
+          oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+  
+          const projectsThisWeek = await Project.countDocuments({ createdAt: { $gte: oneWeekAgo }, isDeleted: false });
+          const projectsThisMonth = await Project.countDocuments({ createdAt: { $gte: oneMonthAgo }, isDeleted: false });
+  
+          const totalTimeSpent = '47h';  // Replace with actual calculation if available
+          const totalSize = await Project.aggregate([{ $group: { _id: null, totalSize: { $sum: "$fileSize" } } }]);
+  
+          const stats = [
+              { title: 'Total Projects', value: totalProjects, icon: 'FileText', trend: `+${projectsThisWeek} this week` },
+              { title: 'Active Projects', value: activeProjects, icon: 'Activity', trend: `+${projectsThisMonth} this month` },
+              { title: 'Time Spent', value: totalTimeSpent, icon: 'Clock', trend: '12h this week' },
+              { title: 'Project Size', value: `${(totalSize[0]?.totalSize / (1024 * 1024)).toFixed(1)}GB`, icon: 'BarChart', trend: '+300MB' },
+          ];
+
+        res.json({
+            stats,
+            projects: projects.map(project => ({
+                id: project._id,
+                name: project.name,
+                lastModified: new Date(project.updatedAt).toLocaleString(),
+                size: (project.fileSize / 1024).toFixed(2) + ' KB',  
+                status: project.status,
+            }))
+        });
+    } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
 // Endpoint to check if project name exists
 app.get("/project/check-name", async (req, res) => {
   const { name } = req.query;
