@@ -6,6 +6,9 @@ const mongoose = require('mongoose');
 const rateLimit = require('express-rate-limit'); // Import rate limiting
 const multer = require('multer');
 const dotenv = require('dotenv');
+const path = require('path');
+const { exec } = require('child_process');
+const fs = require('fs');
 dotenv.config();
 
 const User = require('./models/User');
@@ -13,7 +16,7 @@ const Project = require('./models/Project');
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/');
+    cb(null, 'KAIRA/Images/uploads/');
   },
   filename: function (req, file, cb) {
     cb(null, Date.now() + '-' + file.originalname);
@@ -25,7 +28,7 @@ const upload = multer({ storage: storage });
 const app = express();
 app.use(express.json());
 app.use(cors());
-app.use('/uploads', express.static('uploads'));
+app.use('/KAIRA/Images/uploads', express.static(path.join(__dirname, 'KAIRA/Images/uploads')));
 
 // MongoDB connection
 const connectionString = process.env.MONGO_URI;
@@ -89,7 +92,7 @@ mongoose.connect(connectionString)
 // Rate limiting to prevent abuse (limit to 100 requests per hour per IP)
 const limiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 100,
+  max: 200,
   message: 'Too many requests, please try again later.'
 });
 app.use(limiter);
@@ -203,26 +206,24 @@ app.post('/logout', async (req, res) => {
 });
 
 app.get("/dashboard", async (req, res) => {
-  const projects = await Project.find({ isDeleted: false }).sort({ updatedAt: -1 }).limit(5);
+  const projects = await Project.find({ isDeleted: false }).sort({ updatedAt: -1 });
   try{
           const totalProjects = await Project.countDocuments({ isDeleted: false });
-          const activeProjects = await Project.countDocuments({ status: 'in progress', isDeleted: false });
+          const activeProjects = await Project.countDocuments({ status: 'active', isDeleted: false });
   
           // Calculate trends
           const oneWeekAgo = new Date();
           oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-          const oneMonthAgo = new Date();
-          oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
   
           const projectsThisWeek = await Project.countDocuments({ createdAt: { $gte: oneWeekAgo }, isDeleted: false });
-          const projectsThisMonth = await Project.countDocuments({ createdAt: { $gte: oneMonthAgo }, isDeleted: false });
+          const projectsThisweekactive = await Project.countDocuments({ createdAt: { $gte: oneWeekAgo },status:'active', isDeleted: false });
   
           const totalTimeSpent = '47h';  // Replace with actual calculation if available
           const totalSize = await Project.aggregate([{ $group: { _id: null, totalSize: { $sum: "$fileSize" } } }]);
   
           const stats = [
               { title: 'Total Projects', value: totalProjects, icon: 'FileText', trend: `+${projectsThisWeek} this week` },
-              { title: 'Active Projects', value: activeProjects, icon: 'Activity', trend: `+${projectsThisMonth} this month` },
+              { title: 'Active Projects', value: activeProjects, icon: 'Activity', trend: `+${projectsThisweekactive} this week` },
               { title: 'Time Spent', value: totalTimeSpent, icon: 'Clock', trend: '12h this week' },
               { title: 'Project Size', value: `${(totalSize[0]?.totalSize / (1024 * 1024)).toFixed(1)}GB`, icon: 'BarChart', trend: '+300MB' },
           ];
@@ -281,7 +282,7 @@ app.post("/project", verifyToken, upload.fields([{ name: "image" }]), async (req
           name,
           description,
           tags: tags ? tags.split(",") : [],
-          image: image ? `/uploads/${image.filename}` : null,
+          image: image ? `KAIRA/Images/uploads/${image.filename}` : null,
           imageMetadata: image ? {
               originalName: image.originalname,
               size: image.size,
@@ -331,14 +332,14 @@ app.get('/projectdata/:projectName', async (req, res) => {
 });
 
 
-app.put('/projectdata/:projectName', async (req, res) => {
+app.put('/update/:projectName', async (req, res) => {
   try {
     const { name, description, floorPlan } = req.body;
 
     // Find and update the project
     const updatedProject = await Project.findOneAndUpdate(
       { name: req.params.projectName }, // Find project by name
-      { name, description, image: floorPlan }, // Fields to update
+      { name, description, image: floorPlan, status:"active" }, // Fields to update
       { new: true, runValidators: true } // Return updated document & validate input
     );
 
@@ -360,6 +361,64 @@ app.put('/projectdata/:projectName', async (req, res) => {
   }
 });
 
+
+app.post('/blenderProject', async (req, res) => {
+  const { image: floorPlan } = req.body;
+
+  if (!floorPlan) {
+    return res.status(400).send('Floorplan data is required');
+  }
+
+  const scriptPath = path.join(__dirname, './KAIRA/main.py');
+  const constPath = path.join(__dirname, './KAIRA/FloorplanToBlenderLib/const.py');
+  const iniPath = path.join(__dirname, './Configs/default.ini');
+  const targetFolder = path.join(__dirname, './KAIRA/Target/thattip');
+  const glbFilePath = path.join(targetFolder, 'floorplan.glb');
+
+  // Update the DEFAULT_IMAGE_PATH in const.py
+  const constContent = fs.readFileSync(constPath, 'utf8');
+  const updatedConstContent = constContent.replace(
+    /DEFAULT_IMAGE_PATH = ".*"/,
+    `DEFAULT_IMAGE_PATH = "${floorPlan}"`
+  );
+  fs.writeFileSync(constPath, updatedConstContent, 'utf8');
+
+  // Update the image_path in default.ini
+  const iniContent = fs.readFileSync(iniPath, 'utf8');
+  const updatedIniContent = iniContent.replace(
+    /image_path = ".*"/,
+    `image_path = "${floorPlan}"`
+  );
+  fs.writeFileSync(iniPath, updatedIniContent, 'utf8');
+
+  const pythonProcess = exec(`start cmd.exe /k python "${scriptPath}" "${floorPlan}"`);
+
+  pythonProcess.stdout.on('data', (data) => {
+    console.log(`stdout: ${data}`);
+  });
+
+  pythonProcess.stderr.on('data', (data) => {
+    console.error(`stderr: ${data}`);
+  });
+
+  pythonProcess.on('close', (code) => {
+    console.log(`child process exited with code ${code}`);
+
+    // Check if the .glb file exists and send it as a response
+    if (fs.existsSync(glbFilePath)) {
+      res.sendFile(glbFilePath, (err) => {
+        if (err) {
+          console.error('Error sending .glb file:', err);
+          res.status(500).send('Error sending .glb file');
+        } else {
+          console.log('Sent .glb file successfully');
+        }
+      });
+    } else {
+      res.status(500).send('GLB file not found');
+    }
+  });
+});
 
 
 app.post("/project/uploadModel", verifyToken, upload.single("modelFile"), async (req, res) => {

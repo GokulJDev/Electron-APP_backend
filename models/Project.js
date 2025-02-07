@@ -18,7 +18,7 @@ const projectSchema = new mongoose.Schema({
             validator: function (v) {
                 return v.startsWith("http://") || 
                        v.startsWith("https://") || 
-                       v.startsWith("/uploads/");
+                       v.startsWith("KAIRA/");
             },
             message: props => `${props.value} is not a valid URL or file path!`
         }
@@ -50,7 +50,7 @@ const projectSchema = new mongoose.Schema({
     }],
     status: {
         type: String,
-        enum: ['pending', 'in progress', 'completed'],
+        enum: ['pending', 'active', 'completed'],
         default: 'pending',
     },
     userId: {
