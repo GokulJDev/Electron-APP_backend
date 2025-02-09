@@ -46,7 +46,7 @@ mongoose.connect(connectionString)
   
     const token = authHeader.split(' ')[1]; // Extract token from "Bearer <token>"
     
-    console.log('Received Token:', token); // Log the token to debug
+    // console.log('Received Token:', token)
   
     if (!token) {
       return res.status(403).json({ message: 'Access denied. Token is missing.' });
@@ -58,7 +58,7 @@ mongoose.connect(connectionString)
         return res.status(401).json({ message: 'Invalid token.' });
       }
   
-      req.user = decoded; // Attach decoded user info to request
+      req.userId = decoded.userId; // Attach decoded userId to request
       next();
     });
   };
@@ -205,43 +205,50 @@ app.post('/logout', async (req, res) => {
   }
 });
 
-app.get("/dashboard", async (req, res) => {
-  const projects = await Project.find({ isDeleted: false }).sort({ updatedAt: -1 });
-  try{
-          const totalProjects = await Project.countDocuments({ isDeleted: false });
-          const activeProjects = await Project.countDocuments({ status: 'active', isDeleted: false });
-  
-          // Calculate trends
-          const oneWeekAgo = new Date();
-          oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-  
-          const projectsThisWeek = await Project.countDocuments({ createdAt: { $gte: oneWeekAgo }, isDeleted: false });
-          const projectsThisweekactive = await Project.countDocuments({ createdAt: { $gte: oneWeekAgo },status:'active', isDeleted: false });
-  
-          const totalTimeSpent = '47h';  // Replace with actual calculation if available
-          const totalSize = await Project.aggregate([{ $group: { _id: null, totalSize: { $sum: "$fileSize" } } }]);
-  
-          const stats = [
-              { title: 'Total Projects', value: totalProjects, icon: 'FileText', trend: `+${projectsThisWeek} this week` },
-              { title: 'Active Projects', value: activeProjects, icon: 'Activity', trend: `+${projectsThisweekactive} this week` },
-              { title: 'Time Spent', value: totalTimeSpent, icon: 'Clock', trend: '12h this week' },
-              { title: 'Project Size', value: `${(totalSize[0]?.totalSize / (1024 * 1024)).toFixed(1)}GB`, icon: 'BarChart', trend: '+300MB' },
-          ];
 
-        res.json({
-            stats,
-            projects: projects.map(project => ({
-                id: project._id,
-                name: project.name,
-                lastModified: new Date(project.updatedAt).toLocaleString(),
-                size: (project.fileSize / 1024).toFixed(2) + ' KB',  
-                status: project.status,
-            }))
-        });
-    } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-        res.status(500).json({ message: 'Internal Server Error' });
-    }
+app.get("/dashboard",verifyToken, async (req, res) => {
+  const userId = req.userId;
+
+  try {
+    const projects = await Project.find({ userId: userId, isDeleted: false }).sort({ updatedAt: -1 });
+
+    const totalProjects = await Project.countDocuments({ userId: userId, isDeleted: false });
+    const activeProjects = await Project.countDocuments({ userId: userId, status: 'active', isDeleted: false });
+
+    // Calculate trends
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+    const projectsThisWeek = await Project.countDocuments({ userId: userId, createdAt: { $gte: oneWeekAgo }, isDeleted: false });
+    const projectsThisweekactive = await Project.countDocuments({ userId: userId, createdAt: { $gte: oneWeekAgo }, status: 'active', isDeleted: false });
+
+    const totalTimeSpent = '47h';  // Replace with actual calculation if available
+    const totalSize = await Project.aggregate([
+      { $match: { userId: userId, isDeleted: false } },
+      { $group: { _id: null, totalSize: { $sum: "$fileSize" } } }
+    ]);
+
+    const stats = [
+      { title: 'Total Projects', value: totalProjects, icon: 'FileText', trend: `+${projectsThisWeek} this week` },
+      { title: 'Active Projects', value: activeProjects, icon: 'Activity', trend: `+${projectsThisweekactive} this week` },
+      { title: 'Time Spent', value: totalTimeSpent, icon: 'Clock', trend: '12h this week' },
+      { title: 'Project Size', value: `${(totalSize / (1024 * 1024)).toFixed(1)}GB`, icon: 'BarChart', trend: '+300MB' },
+    ];
+
+    res.json({
+      stats,
+      projects: projects.map(project => ({
+        id: project._id,
+        name: project.name,
+        lastModified: new Date(project.updatedAt).toLocaleString(),
+        size: (project.fileSize / 1024).toFixed(2) + ' KB',
+        status: project.status,
+      }))
+    });
+  } catch (err) {
+    console.error('Error fetching dashboard data:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
 });
 
 // Endpoint to check if project name exists
