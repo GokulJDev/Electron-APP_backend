@@ -58,7 +58,7 @@ mongoose.connect(connectionString)
         return res.status(401).json({ message: 'Invalid token.' });
       }
   
-      req.userId = decoded.userId; // Attach decoded userId to request
+      req.user = decoded; // Attach decoded user object to request
       next();
     });
   };
@@ -207,7 +207,7 @@ app.post('/logout', async (req, res) => {
 
 
 app.get("/dashboard",verifyToken, async (req, res) => {
-  const userId = req.userId;
+  const userId = req.user.userId;
 
   try {
     const projects = await Project.find({ userId: userId, isDeleted: false }).sort({ updatedAt: -1 });
@@ -228,11 +228,13 @@ app.get("/dashboard",verifyToken, async (req, res) => {
       { $group: { _id: null, totalSize: { $sum: "$fileSize" } } }
     ]);
 
+    const totalSizeInGB = totalSize.length > 0 && totalSize[0].totalSize ? (totalSize[0].totalSize / (1024 * 1024 * 1024)).toFixed(1) : 0;
+
     const stats = [
       { title: 'Total Projects', value: totalProjects, icon: 'FileText', trend: `+${projectsThisWeek} this week` },
       { title: 'Active Projects', value: activeProjects, icon: 'Activity', trend: `+${projectsThisweekactive} this week` },
       { title: 'Time Spent', value: totalTimeSpent, icon: 'Clock', trend: '12h this week' },
-      { title: 'Project Size', value: `${(totalSize / (1024 * 1024)).toFixed(1)}GB`, icon: 'BarChart', trend: '+300MB' },
+      { title: 'Project Size', value: `${totalSizeInGB}GB`, icon: 'BarChart', trend: '+300MB' },
     ];
 
     res.json({
@@ -330,6 +332,8 @@ app.get('/projectdata/:projectName', async (req, res) => {
       res.json({
           name: project.name,
           description: project.description,
+          tags: project.tags.join(', '),
+          status: project.status,
           floorPlan: project.image ? `${project.image}` : null,
       });
   } catch (error) {
