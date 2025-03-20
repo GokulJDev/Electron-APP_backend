@@ -13,6 +13,7 @@ dotenv.config();
 
 const User = require('./models/User');
 const Project = require('./models/Project');
+const Profile = require('./models/Profile');
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -102,25 +103,78 @@ app.post('/register', async (req, res) => {
   const { username, password, role } = req.body;
 
   try {
-    // Check if the username already exists
-    const existingUser = await User.findOne({ username });
-    if (existingUser) {
-      return res.status(400).json({ message: 'Username already exists' });
+      const existingUser = await User.findOne({ username });
+      if (existingUser) {
+          return res.status(400).json({ message: 'Username already exists' });
+      }
+
+      // Create a new user instance
+      const newUser = new User({
+          username,
+          password,
+          role,
+      });
+
+      // Save the user to the database
+      await newUser.save();
+
+      // Create a profile for the new user
+      const newProfile = await Profile.create({
+          user: newUser._id,
+          username: newUser.username,
+      });
+
+      // Link the profile to the user
+      newUser.profile = newProfile._id;
+      await newUser.save();
+
+      res.status(201).json({ message: 'User registered successfully!' });
+  } catch (err) {
+      console.error('Error during registration:', err);
+      res.status(500).json({ message: 'Error registering user' });
+  }
+});
+
+// Route to fetch profile details
+app.get('/profile', verifyToken, async (req, res) => {
+  const userId = req.user.userId;
+  try {
+    // Find the user by ID and populate the profile
+    let user = await User.findById(userId).populate('profile');
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    // Create a new user instance
-    const newUser = new User({
-      username,
-      password, // Plaintext password will be hashed by pre-save middleware
-      role,
-    });
+    // If the user exists but has no profile, create a default profile
+    if (!user.profile) {
+      const defaultProfile = await Profile.create({
+        user: userId,
+        username: user.username || 'Default Username',
+        gender: 'Prefer not to say', // Default value
+        dateOfBirth: new Date('2000-01-01'), // Default value
+        country: 'Unknown', // Default value
+        address: 'Not provided', // Default value
+        preferredLanguage: 'English', // Default value
+      });
 
-    // Save the user to the database
-    await newUser.save();
-    res.status(201).json({ message: 'User registered successfully!' });
-  } catch (err) {
-    console.error('Error during registration:', err);
-    res.status(500).json({ message: 'Error registering user' });
+      user.profile = defaultProfile._id;
+      await user.save();
+
+      // Format the dateOfBirth to yyyy-MM-dd
+      defaultProfile.dateOfBirth = defaultProfile.dateOfBirth.toISOString().split('T')[0];
+
+      return res.status(200).json({ profile: defaultProfile });
+    }
+
+    // Format the dateOfBirth to yyyy-MM-dd
+    user.profile.dateOfBirth = user.profile.dateOfBirth.toISOString().split('T')[0];
+
+    // Send the profile details as a response
+    res.status(200).json({ profile: user.profile });
+  } catch (error) {
+    console.error('Error fetching profile details:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 

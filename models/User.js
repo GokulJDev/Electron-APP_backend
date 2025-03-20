@@ -12,7 +12,11 @@ const UserSchema = new mongoose.Schema({
         default: 'user' // Optional
     },
     lastLogin: { type: Date, default: null },
-    isLoggedIn: { type: Boolean, default: false } // Track if user is logged in
+    isLoggedIn: { type: Boolean, default: false }, // Track if user is logged in
+    profile: { // Add this field
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Profile',
+    }
 }, { collection: 'Users', timestamps: true });
 
 // Pre-save middleware to hash passwords
