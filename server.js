@@ -389,6 +389,7 @@ app.get('/projectdata/:projectName', async (req, res) => {
           tags: project.tags.join(', '),
           status: project.status,
           floorPlan: project.image ? `${project.image}` : null,
+          projectId: project._id,
       });
   } catch (error) {
       console.error("Error fetching project:", error);
@@ -397,15 +398,22 @@ app.get('/projectdata/:projectName', async (req, res) => {
 });
 
 
-app.put('/update/:projectName', async (req, res) => {
+app.put('/update/:projectid', upload.fields([{ name: "image" }]), async (req, res) => {
   try {
-    const { name, description, floorPlan } = req.body;
 
-    // Find and update the project
+    const { name, tags, description } = req.body;
+    const image = req.files["image"] ? req.files["image"][0] : null;
+
     const updatedProject = await Project.findOneAndUpdate(
-      { name: req.params.projectName }, // Find project by name
-      { name, description, image: floorPlan, status:"active" }, // Fields to update
-      { new: true, runValidators: true } // Return updated document & validate input
+      { _id: req.params.projectid },
+      { 
+        name, 
+        tags: tags ? tags.split(",") : [], 
+        description, 
+        image: image ? `KAIRA/Images/uploads/${_id}/${image}` : undefined, 
+        status: "active" 
+      },
+      { new: true, runValidators: true }
     );
 
     if (!updatedProject) {
@@ -416,8 +424,10 @@ app.put('/update/:projectName', async (req, res) => {
       message: "Project updated successfully",
       project: {
         name: updatedProject.name,
+        tags: updatedProject.tags.join(', '),
+        status: updatedProject.status,
         description: updatedProject.description,
-        floorPlan: updatedProject.image ? `${updatedProject.image}` : null,
+        image: updatedProject.image || null,
       },
     });
   } catch (error) {

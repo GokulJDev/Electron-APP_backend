@@ -16,12 +16,13 @@ const projectSchema = new mongoose.Schema({
         type: String, // Stores image file path or URL
         validate: {
             validator: function (v) {
+                if (!v) return true; // Allow null or undefined
                 return v.startsWith("http://") || 
                        v.startsWith("https://") || 
                        v.startsWith("KAIRA/");
             },
             message: props => `${props.value} is not a valid URL or file path!`
-        }
+        }        
     },
     imageMetadata: {
         originalName: String,

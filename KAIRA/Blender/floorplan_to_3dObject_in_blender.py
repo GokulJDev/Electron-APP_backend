@@ -22,15 +22,13 @@ HOW TO: (old style)
 5. Open this file "alt+o"
 6. Run script
 
-This code is tested on Windows 10, Blender 2.93, in December 2021.
 """
 
 """
 Our helpful functions
-"""
-
 # TODO: restructure this file with a class and help-function to save a lot of lines of code!
 # TODO: fix index should be same as floorplan folder
+"""
 
 
 def read_from_file(file_path):
@@ -111,13 +109,13 @@ def create_custom_mesh(objname, verts, faces, mat=None, cen=None):
     myobject.location.y = center[1] - parent_center[1]
     myobject.location.z = center[2] - parent_center[2]
 
-    # add material
-    if mat is None:  # add random color
-        myobject.data.materials.append(
-            create_mat(np.random.randint(0, 40, size=4))
-        )  # add the material to the object
-    else:
-        myobject.data.materials.append(mat)  # add the material to the object
+    # # add material
+    # if mat is None:  # add random color
+    #     myobject.data.materials.append(
+    #         create_mat(np.random.randint(0, 40, size=4))
+    #     )  # add the material to the object
+    # else:
+    #     myobject.data.materials.append(mat)  # add the material to the object
     return myobject
 
 
@@ -137,6 +135,8 @@ def main(argv):
     # Remove starting object cube
     objs = bpy.data.objects
     objs.remove(objs["Cube"], do_unlink=True)
+    objs.remove(objs["Camera"], do_unlink=True)
+    objs.remove(objs["Light"], do_unlink=True)
 
     if len(argv) > 7:  # Note YOU need 8 arguments!
         program_path = argv[5]
