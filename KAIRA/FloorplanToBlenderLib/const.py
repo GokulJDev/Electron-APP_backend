@@ -24,7 +24,7 @@ BASE_FORMAT = BLEND_FORMAT
 
 THREE_D_FORMAT = ".glb"
 
-DEFAULT_IMAGE_PATH = "KAIRA/Images/uploads/1743952912790-example.png"
+DEFAULT_IMAGE_PATH = "KAIRA/Images/uploads/1744056859820-example23.png"
 
 class MODE(Enum):
     AXIS = 0

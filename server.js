@@ -461,6 +461,8 @@ app.post('/blenderProject', async (req, res) => {
   const iniPath = path.join(__dirname, './Configs/default.ini');
   const targetFolder = path.join(__dirname, './KAIRA/Target/thattip');
   const glbFilePath = path.join(targetFolder, 'floorplan.glb');
+  const uploadFolder = path.join(__dirname, './KAIRA/Images/uploads');
+  const uploadGlbPath = path.join(uploadFolder, `${Date.now()}-floorplan.glb`);
 
   // Update the DEFAULT_IMAGE_PATH in const.py
   const constContent = fs.readFileSync(constPath, 'utf8');
@@ -488,19 +490,37 @@ app.post('/blenderProject', async (req, res) => {
     console.error(`stderr: ${data}`);
   });
 
-  pythonProcess.on('close', (code) => {
+  pythonProcess.on('close', async (code) => {
     console.log(`child process exited with code ${code}`);
 
-    // Check if the .glb file exists and send it as a response
+    // Check if the .glb file exists
     if (fs.existsSync(glbFilePath)) {
-      res.sendFile(glbFilePath, (err) => {
-        if (err) {
-          console.error('Error sending .glb file:', err);
-          res.status(500).send('Error sending .glb file');
-        } else {
-          console.log('Sent .glb file successfully');
+      try {
+        // Copy the .glb file to the uploads folder
+        fs.copyFileSync(glbFilePath, uploadGlbPath);
+
+        // Update the project with the modelfile path
+        const project = await Project.findOne({ name: req.body.projectName }).exec();
+        if (!project) {
+          return res.status(404).json({ message: 'Project not found' });
         }
-      });
+
+        project.modelFile = `KAIRA/Images/uploads/${path.basename(uploadGlbPath)}`;
+        await project.save();
+
+        // Send the .glb file to the client
+        res.sendFile(glbFilePath, (err) => {
+          if (err) {
+            console.error('Error sending .glb file:', err);
+            res.status(500).send('Error sending .glb file');
+          } else {
+            console.log('Sent .glb file successfully');
+          }
+        });
+      } catch (err) {
+        console.error('Error updating project with modelfile:', err);
+        res.status(500).json({ message: 'Error saving modelfile to project' });
+      }
     } else {
       res.status(500).send('GLB file not found');
     }
@@ -531,40 +551,6 @@ app.get("/vrlaunch", async (req, res) => {
     res.status(500).json({ status: "error", message: "Failed to launch VR", error: err.message });
   }
 });
-
-app.post("/project/uploadModel", verifyToken, upload.single("modelFile"), async (req, res) => {
-  try {
-      const { id } = req.params;
-      const modelFile = req.file;
-      const userId = req.user.userId;
-
-      if (!modelFile) {
-          return res.status(400).json({ error: "No 3D model file uploaded" });
-      }
-
-      const project = await Project.findById(id);
-      if (!project) {
-          return res.status(404).json({ error: "Project not found" });
-      }
-
-      project.modelFile = `/uploads/models/${modelFile.filename}`;
-      project.modelMetadata = {
-          originalName: modelFile.originalname,
-          size: modelFile.size,
-          format: modelFile.mimetype,
-      };
-
-      project.auditLogs.push({ action: "Uploaded 3D Model", performedBy: userId, details: "3D model added to project" });
-
-      await project.save();
-      res.status(200).json({ message: "3D model uploaded successfully", project });
-
-  } catch (error) {
-      console.error("Error uploading 3D model:", error);
-      res.status(500).json({ error: "Internal Server Error" });
-  }
-});
-
 
 
 // Start the server

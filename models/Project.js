@@ -33,9 +33,10 @@ const projectSchema = new mongoose.Schema({
         type: String, // Stores 3D model file path or URL
         validate: {
             validator: function (v) {
+                if (!v) return true;
                 return v.startsWith("http://") || 
                        v.startsWith("https://") || 
-                       v.startsWith("/uploads/models/");
+                       v.startsWith("KAIRA/");
             },
             message: props => `${props.value} is not a valid 3D model URL or file path!`
         }
