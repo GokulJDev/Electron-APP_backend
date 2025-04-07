@@ -7,7 +7,7 @@ const rateLimit = require('express-rate-limit'); // Import rate limiting
 const multer = require('multer');
 const dotenv = require('dotenv');
 const path = require('path');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const fs = require('fs');
 dotenv.config();
 
@@ -333,43 +333,48 @@ app.get("/project/check-name", async (req, res) => {
 // Route to create a new project
 app.post("/project", verifyToken, upload.fields([{ name: "image" }]), async (req, res) => {
   try {
-      const { name, description, tags } = req.body;
-      const image = req.files["image"] ? req.files["image"][0] : null;
-      const userId = req.user.userId;
+    const { name, description, tags } = req.body;
+    const image = req.files["image"] ? req.files["image"][0] : null;
+    const userId = req.user.userId;
 
-      // Fetch the username from userId
-      const user = await User.findById(userId);
-      const username = user ? user.username : "Unknown User";
+    // Fetch the username from userId
+    const user = await User.findById(userId);
+    const username = user ? user.username : "Unknown User";
 
-      const newProject = new Project({
-          name,
-          description,
-          tags: tags ? tags.split(",") : [],
-          image: image ? `KAIRA/Images/uploads/${image.filename}` : null,
-          imageMetadata: image ? {
-              originalName: image.originalname,
-              size: image.size,
-              mimeType: image.mimetype,
-          } : null,
-          userId: userId,
-          status: "pending",
-          fileSize: image ? image.size : 0, 
-          auditLogs: [{ action: "Created Project", performedBy: username, details: "Initial project creation" }]
-      });
+    // Create the project without the image path
+    const newProject = new Project({
+      name,
+      description,
+      tags: tags ? tags.split(",") : [],
+      image: image ? `KAIRA/Images/uploads/${image.filename}` : null,
+      imageMetadata: image
+        ? {
+            originalName: image.originalname,
+            size: image.size,
+            mimeType: image.mimetype,
+          }
+        : null,
+      userId: userId,
+      status: "pending",
+      fileSize: image ? image.size : 0,
+      auditLogs: [
+        { action: "Created Project", performedBy: username, details: "Initial project creation" },
+      ],
+    });
 
-      await newProject.save();
-      console.log("New project ID:", newProject._id);
-      res.status(201).json({ 
-          message: "Project created successfully", 
-          projectId: newProject._id,
-          projectName: newProject.name,
-          project: newProject 
-      });
-    
+    // Save the project to generate the _id
+    await newProject.save();
 
+    console.log("New project ID:", newProject._id);
+    res.status(201).json({
+      message: "Project created successfully",
+      projectId: newProject._id,
+      projectName: newProject.name,
+      project: newProject,
+    });
   } catch (error) {
-      console.error("Error creating project:", error);
-      res.status(500).json({ error: "Internal Server Error" });
+    console.error("Error creating project:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
@@ -400,34 +405,41 @@ app.get('/projectdata/:projectName', async (req, res) => {
 
 app.put('/update/:projectid', upload.fields([{ name: "image" }]), async (req, res) => {
   try {
-
     const { name, tags, description } = req.body;
     const image = req.files["image"] ? req.files["image"][0] : null;
 
-    const updatedProject = await Project.findOneAndUpdate(
-      { _id: req.params.projectid },
-      { 
-        name, 
-        tags: tags ? tags.split(",") : [], 
-        description, 
-        image: image ? `KAIRA/Images/uploads/${_id}/${image}` : undefined, 
-        status: "active" 
-      },
-      { new: true, runValidators: true }
-    );
+    // Find the project by ID
+    const project = await Project.findById(req.params.projectid);
 
-    if (!updatedProject) {
+    if (!project) {
       return res.status(404).json({ message: "Project not found" });
     }
+
+    // If a new image is uploaded, delete the old image file
+    if (image && project.image) {
+      const oldImagePath = path.join(__dirname, project.image);
+      if (fs.existsSync(oldImagePath)) {
+        fs.unlinkSync(oldImagePath); // Delete the old image file
+      }
+    }
+
+    // Update the project with new data
+    project.name = name || project.name;
+    project.tags = tags ? tags.split(",") : project.tags;
+    project.description = description || project.description;
+    project.image = image ? `KAIRA/Images/uploads/${image.filename}` : project.image;
+    project.status = "active";
+
+    await project.save();
 
     res.json({
       message: "Project updated successfully",
       project: {
-        name: updatedProject.name,
-        tags: updatedProject.tags.join(', '),
-        status: updatedProject.status,
-        description: updatedProject.description,
-        image: updatedProject.image || null,
+        name: project.name,
+        tags: project.tags.join(', '),
+        status: project.status,
+        description: project.description,
+        image: project.image || null,
       },
     });
   } catch (error) {
@@ -495,6 +507,30 @@ app.post('/blenderProject', async (req, res) => {
   });
 });
 
+app.get("/vrlaunch", async (req, res) => {
+  const exePath = path.join(__dirname, "public", "vr", "KAIRA_MAIN.exe");
+  console.log("🛠 Trying to launch VR from:", exePath);
+
+  if (!fs.existsSync(exePath)) {
+    console.error("❌ File not found at:", exePath);
+    return res.status(404).json({ status: "error", message: "VR executable not found" });
+  }
+
+  try {
+    const process = spawn(exePath, ['-screen-fullscreen', '0', '-screen-width', '1280', '-screen-height', '720'], {
+      detached: true,
+      stdio: 'ignore'
+    });
+    
+
+    process.unref();
+    console.log("✅ VR launched successfully!");
+    res.json({ status: "success", message: "VR launched!" });
+  } catch (err) {
+    console.error("🔥 Error while launching VR:", err);
+    res.status(500).json({ status: "error", message: "Failed to launch VR", error: err.message });
+  }
+});
 
 app.post("/project/uploadModel", verifyToken, upload.single("modelFile"), async (req, res) => {
   try {

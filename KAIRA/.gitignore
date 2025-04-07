@@ -133,7 +133,7 @@ dmypy.json
 .pyre/
 
 # Ignore data files and blender files
-Target/
+#Target/
 Data/
 
 # Ignore jupyter
