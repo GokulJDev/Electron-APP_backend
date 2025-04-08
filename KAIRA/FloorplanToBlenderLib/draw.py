@@ -2,6 +2,13 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
+"""
+DRAW
+
+This file contains functions and tools for visualization of data.
+
+"""
+
 def image(image, title="FTBL", wait=0):
     """
     Display an image using OpenCV's imshow function.

@@ -3,6 +3,12 @@ import json
 from . import const
 from . import config
 
+"""
+Floorplan
+This file contains functions for handling the floorplan class.
+
+"""
+
 
 def new_floorplan(config):
     """

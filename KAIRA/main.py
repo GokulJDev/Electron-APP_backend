@@ -10,84 +10,69 @@ from FloorplanToBlenderLib import (
 )  # floorplan to blender lib
 import os
 
+"""
+Create Blender Project from floorplan
+This file contains a simple example implementation of creations of 3d models from
+floorplans. You will need blender and an image of a floorplan to make this work.
+
+"""
+
 
 def create_blender_project(data_paths):
-    if not os.path.exists("." + target_folder):
-        os.makedirs("." + target_folder)
+    # # Full folder paths
+    # target_dir = "." + const.TARGET_PATH
+    # glb_dir = "." + const.GLB_PATH
 
-    target_base = target_folder + const.TARGET_NAME
-    target_path = target_base + const.BASE_FORMAT
-    target_path = (
-        IO.get_next_target_base_name(target_base, target_path) + const.BASE_FORMAT
-    )
+    # # Create target and glb folders if they don't exist
+    # if not os.path.exists(target_dir):
+    #     os.makedirs(target_dir)
+    # if not os.path.exists(glb_dir):
+    #     os.makedirs(glb_dir)
 
-    target_path1 = target_base + const.THREE_D_FORMAT
-    target_path1 = (
-        IO.get_next_target_base_name(target_base, target_path1) + const.THREE_D_FORMAT
-    )
+    # # Create file paths
+    target_base = const.TARGET_NAME
+    blend_base_path = os.path.join(const.TARGET_PATH, target_base)
+    glb_base_path = os.path.join(const.GLB_PATH, target_base)
 
-    # Create blender project
+    # Generate next file name if file already exists
+    blend_path = IO.get_next_target_base_name(blend_base_path, blend_base_path + ".blend") + ".blend"
+    glb_path = IO.get_next_target_base_name(glb_base_path, glb_base_path + ".glb") + ".glb"
+
+    # Full path to blend and glb
+    full_blend_path = blend_path
+    full_glb_path = glb_path
+
+    # Create .blend file from data
     check_output(
         [
             blender_install_path,
-            "-noaudio",  # this is a dockerfile ubuntu hax fix
+            "-noaudio",
             "--background",
             "--python",
             blender_script_path,
-            program_path,  # Send this as parameter to script
-            target_path,
-        ]
-        + data_paths
+            program_path,
+            full_blend_path,
+        ] + data_paths
     )
 
+    # Export .glb from .blend
     check_output(
         [
             blender_install_path,
-            "-noaudio",  # this is a dockerfile ubuntu hax fix
+            "-noaudio",
             "--background",
             "--python",
-            blender_script_path,
-            program_path,  # Send this as parameter to script
-            target_path1,
+            glb_script_path,
+            "--",
+            full_blend_path,
+            ".glb",
+            full_glb_path,
         ]
-        + data_paths
     )
 
-    outformat = config.get(
-        const.SYSTEM_CONFIG_FILE_NAME, "SYSTEM", const.STR_OUT_FORMAT
-    ).replace('"', "")
-    # Transform .blend project to another format!
-    if outformat != ".blend":
-        check_output(
-            [
-                blender_install_path,
-                "-noaudio",  # this is a dockerfile ubuntu hax fix
-                "--background",
-                "--python",
-                "./Blender/blender_export_any.py",
-                "." + target_path,
-                outformat,
-                target_base + outformat,
-            ]
-        )
-        print("Object created at:" + program_path + target_base + outformat)
-
-        check_output(
-            [
-                blender_install_path,
-                "-noaudio",  # this is a dockerfile ubuntu hax fix
-                "--background",
-                "--python",
-                "./Blender/blender_export_any.py",
-                "." + target_path1,
-                outformat,
-                target_base + "_1" + outformat,
-            ]
-        )
-        print("Object created at:" + program_path + target_base + "_1" + outformat)
-
-    print("Project created at: " + program_path + target_path)
-    
+    print("✅ .blend created at:", program_path + blend_path)
+    print("✅ .glb created at:", program_path + glb_path)
+ 
 
 if __name__ == "__main__":
     """
@@ -103,6 +88,7 @@ if __name__ == "__main__":
     image_paths = []
     program_path = const.PROGRAM_PATH
     blender_script_path = const.BLENDER_SCRIPT_PATH
+    glb_script_path = const.GLB_SCRIPT_PATH
     dialog.init()
     data_paths = list()
 

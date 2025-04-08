@@ -8,8 +8,6 @@ from . import const
 Transform
 This file contains functions for transforming data between different formats, such as scaling, rotating, and generating vertices for floorplans.
 
-FloorplanToBlender3d
-Copyright (C) 2022 Daniel Westberg
 """
 
 

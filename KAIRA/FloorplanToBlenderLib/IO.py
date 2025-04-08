@@ -11,7 +11,13 @@ from . import const
 from . import image
 from . import config
 
+"""
+IO
+This file contains functions for handling files, reading and saving floorplan data, 
+and ensuring the necessary software (like Blender) is correctly installed.
+These functions are integral to automating the workflow for generating Blender-ready 3D models from floorplans.
 
+"""
 
 def find_reuseable_data(image_path, path):
     """

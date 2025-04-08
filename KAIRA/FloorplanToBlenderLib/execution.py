@@ -3,6 +3,12 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 from math import atan2, degrees
 
+"""
+Execution
+This file contains example usages and creations of multiple floorplans.
+
+"""
+
 def simple_single(floorplan, show=True):
     """
     Generate a single simple floorplan.

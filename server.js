@@ -459,7 +459,7 @@ app.post('/blenderProject', async (req, res) => {
   const scriptPath = path.join(__dirname, './KAIRA/main.py');
   const constPath = path.join(__dirname, './KAIRA/FloorplanToBlenderLib/const.py');
   const iniPath = path.join(__dirname, './Configs/default.ini');
-  const targetFolder = path.join(__dirname, './KAIRA/Target/thattip');
+  const targetFolder = path.join(__dirname, './KAIRA/Glb');
   const glbFilePath = path.join(targetFolder, 'floorplan.glb');
   const uploadFolder = path.join(__dirname, './KAIRA/Images/uploads');
   const uploadGlbPath = path.join(uploadFolder, `${Date.now()}-floorplan.glb`);
@@ -474,10 +474,9 @@ app.post('/blenderProject', async (req, res) => {
 
   // Update the image_path in default.ini
   const iniContent = fs.readFileSync(iniPath, 'utf8');
-  const updatedIniContent = iniContent.replace(
-    /image_path = ".*"/,
-    `image_path = "${floorPlan}"`
-  );
+  const updatedIniContent = iniContent
+    .replace(/image_path = ".*"/, `image_path = "${floorPlan}"`)
+    .replace(/calibration_image_path = ".*"/, `calibration_image_path = "${floorPlan}"`);
   fs.writeFileSync(iniPath, updatedIniContent, 'utf8');
 
   const pythonProcess = exec(`start cmd.exe /k python "${scriptPath}" "${floorPlan}"`);

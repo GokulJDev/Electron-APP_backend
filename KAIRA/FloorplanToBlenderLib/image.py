@@ -4,6 +4,13 @@ from PIL import Image
 from . import calculate
 from . import const
 
+"""
+Image
+This file contains code for image processing, used when creating a Blender project.
+Contains functions for tweaking and filtering images for better results.
+
+"""
+
 # Rescale an image using PIL
 def pil_rescale_image(image, factor):
     """

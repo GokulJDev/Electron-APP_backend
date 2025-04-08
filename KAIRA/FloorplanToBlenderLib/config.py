@@ -7,6 +7,11 @@ from . import IO
 from . import const
 from . import calculate
 
+"""
+Config
+This file contains functions for handling config files.
+
+"""
 '''
 # TODO: settings for coloring all objects
 # TODO: add config security check, before startup!

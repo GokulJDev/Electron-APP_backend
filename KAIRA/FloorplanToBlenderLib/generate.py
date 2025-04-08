@@ -5,6 +5,13 @@ import numpy as np
 
 from FloorplanToBlenderLib.generator import Door, Floor, Room, Wall, Window
 
+"""
+Generate
+This file contains code for generating data files used when creating a Blender project.
+It temporarily stores calculated data and transfers data to the Blender script.
+
+"""
+
 def generate_all_files(
     floorplan,
     info,

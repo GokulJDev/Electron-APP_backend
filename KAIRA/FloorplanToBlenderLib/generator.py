@@ -10,6 +10,12 @@ from . import const
 from . import draw
 from . import calculate
 
+"""
+Generator
+This file contains structures for different floorplan detection features.
+
+"""
+
 
 class Generator:
     __metaclass__ = abc.ABCMeta

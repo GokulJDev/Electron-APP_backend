@@ -4,6 +4,11 @@ import numpy as np
 from . import detect
 from . import const
 
+"""
+Calculate
+This file contains functions for handling math or calculations.
+"""
+
 # Helper function to calculate average
 def average(lst):
     return sum(lst) / len(lst)

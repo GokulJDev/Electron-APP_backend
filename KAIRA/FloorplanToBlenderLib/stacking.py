@@ -10,8 +10,7 @@ import numpy as np
 Stacking
 This file contains functions for handling stacking file parsing and creating larger stacking.
 These functions help in arranging multiple floorplans into a single scene, automating the process of stacking and placing them.
-FloorplanToBlender3d
-Copyright (C) 2022 Daniel Westberg
+
 """
 
 def parse_stacking_file(path):

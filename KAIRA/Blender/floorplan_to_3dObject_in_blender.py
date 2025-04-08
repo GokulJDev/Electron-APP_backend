@@ -109,7 +109,7 @@ def create_custom_mesh(objname, verts, faces, mat=None, cen=None):
     myobject.location.y = center[1] - parent_center[1]
     myobject.location.z = center[2] - parent_center[2]
 
-    # # add material
+    # add material
     # if mat is None:  # add random color
     #     myobject.data.materials.append(
     #         create_mat(np.random.randint(0, 40, size=4))

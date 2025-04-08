@@ -12,8 +12,6 @@ import math
 Detect
 This file contains functions used when detecting and calculating shapes in images.
 
-FloorplanToBlender3d
-Copyright (C) 2022 Daniel Westberg
 """
 
 

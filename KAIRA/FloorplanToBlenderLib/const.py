@@ -1,6 +1,15 @@
 from enum import Enum
 import os
 
+"""
+Const
+This file contains constants to remove "magic" numbers and strings.
+
+Use this file to customize all strings in the program easily from one place.
+Be careful changing these.
+
+"""
+
 # Main script
 BLEND_FORMAT = ".blend"
 SUPPORTED_BLENDER_FORMATS = (
@@ -24,7 +33,7 @@ BASE_FORMAT = BLEND_FORMAT
 
 THREE_D_FORMAT = ".glb"
 
-DEFAULT_IMAGE_PATH = "KAIRA/Images/uploads/1744056859820-example23.png"
+DEFAULT_IMAGE_PATH = "KAIRA/Images/uploads/1744124922227-example23.png"
 
 class MODE(Enum):
     AXIS = 0
@@ -34,8 +43,10 @@ class MODE(Enum):
 # Paths to save folder
 BASE_PATH = "Data/"
 TARGET_PATH = "KAIRA/Target/"
+GLB_PATH = "KAIRA/Glb/"
 TARGET_NAME = "floorplan"
 BLENDER_SCRIPT_PATH = "KAIRA/Blender/floorplan_to_3dObject_in_blender.py"
+GLB_SCRIPT_PATH = "KAIRA/Blender/blender_export_any.py"
 PROGRAM_PATH = "D:\\VS Code\\Electron-APP_backend\\"
 
 # Generators

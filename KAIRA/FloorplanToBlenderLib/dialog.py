@@ -1,5 +1,11 @@
 from pyfiglet import Figlet
 
+"""
+Dialog
+This file contains code for handling dialog and can be seen as a gui solution.
+
+"""
+
 
 def figlet(text="Floorplan to Blender3d", font="slant"):
     f = Figlet(font=font)
@@ -23,5 +29,5 @@ def question(text, default):
 
 
 def end_copyright():
-    print("")
+    
     print("")
