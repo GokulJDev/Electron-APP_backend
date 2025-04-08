@@ -278,17 +278,19 @@ app.get("/dashboard",verifyToken, async (req, res) => {
 
     const totalTimeSpent = '47h';  // Replace with actual calculation if available
     const totalSize = await Project.aggregate([
-      { $match: { userId: userId, isDeleted: false } },
-      { $group: { _id: null, totalSize: { $sum: "$fileSize" } } }
+      { $match: { userId: userId, isDeleted: false } }, // Filter projects by userId and exclude deleted ones
+      { $group: { _id: null, totalSize: { $sum: "$fileSize" } } } // Sum the fileSize field
     ]);
-
-    const totalSizeInGB = totalSize.length > 0 && totalSize[0].totalSize ? (totalSize[0].totalSize / (1024 * 1024 * 1024)).toFixed(1) : 0;
+    
+    const totalSizeInMB = totalSize.length > 0 
+      ? (totalSize[0].totalSize / (1024 * 1024)).toFixed(1) // Convert bytes to MB
+      : 0;
 
     const stats = [
       { title: 'Total Projects', value: totalProjects, icon: 'FileText', trend: `+${projectsThisWeek} this week` },
       { title: 'Active Projects', value: activeProjects, icon: 'Activity', trend: `+${projectsThisweekactive} this week` },
       { title: 'Time Spent', value: totalTimeSpent, icon: 'Clock', trend: '12h this week' },
-      { title: 'Project Size', value: `${totalSizeInGB}GB`, icon: 'BarChart', trend: '+300MB' },
+      { title: 'Project Size', value: `${totalSizeInMB}MB`, icon: 'BarChart', trend: '+300MB' },
     ];
 
     res.json({
@@ -524,6 +526,41 @@ app.post('/blenderProject', async (req, res) => {
       res.status(500).send('GLB file not found');
     }
   });
+});
+
+
+app.get("/vrproject", verifyToken, async (req, res) => {
+  const userId = req.user.userId;
+
+  try {
+    const projects = await Project.find({ userId: userId, isDeleted: false }).sort({ updatedAt: -1 });
+
+    res.json({
+      projects: projects.map(project => {
+        let progress = 0;
+
+        if (project.image) progress += 20;
+        if (project.name && project.description) progress += 20;
+        if (project.modelFile) progress += 30;
+        if (project.tags && project.tags.length > 0) progress += 10;
+        if (project.status === "active") progress += 10;
+        if (project.status === "completed") progress += 10;
+
+        return {
+          id: project._id,
+          name: project.name,
+          status: project.status,
+          lastModified: new Date(project.updatedAt).toLocaleString(),
+          size: (project.fileSize / (1024 * 1024)).toFixed(2) + " MB", // Convert size to MB
+          progress, // Calculated progress
+          tags: project.tags || [], // Default to an empty array if not available
+        };
+      }),
+    });
+  } catch (err) {
+    console.error("Error fetching projects:", err);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
 });
 
 app.get("/vrlaunch", async (req, res) => {
